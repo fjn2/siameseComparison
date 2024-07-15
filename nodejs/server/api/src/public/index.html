@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bounding Box Creator</title>
+    <style>
+        #container {
+            position: relative;
+            display: inline-block;
+        }
+        #image {
+            display: block;
+            pointer-events: none;
+            user-select: none;
+        }
+        .bounding-box {
+            position: absolute;
+            border: 2px solid red;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    DEPRECATED!!!!!!
+    <h1>
+        Wheels dataset generator
+    </h1>
+    <h3 id="infoContainer"></h3>
+    <div id="container">
+        <img style="max-width: 80vw;max-height: 60vh;" id="image" />
+    </div>
+    <div style="margin:4px;user-select: none;">
+        <button id="sendButton">Send</button>
+        <button id="skipButton">Skip</button>
+        <button id="refreshButton">Refresh</button>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const image = document.getElementById('image');
+        let startX, startY, endX, endY;
+        let recording = false;
+        let shiftKeyHeld = false;
+        let boundingBoxCounter = 0;
+
+        container.addEventListener('mousedown', (e) => {
+            if (!shiftKeyHeld) {
+                // If Shift key is not held, reset bounding boxes
+                clearBoundingBoxes();
+            }
+            endX = startX = e.pageX - container.offsetLeft;
+            endY = startY = e.pageY - container.offsetTop;
+            recording = true;
+            createBoundingBox();
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (recording) {
+                endX = e.pageX - container.offsetLeft;
+                endY = e.pageY - container.offsetTop;
+                updateBoundingBox();
+            }
+        });
+
+        container.addEventListener('mouseup', () => {
+            recording = false;
+            console.log(`Bounding Box ${boundingBoxCounter}: (${startX}, ${startY}) to (${endX}, ${endY})`);
+            boundingBoxCounter++;
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') {
+                shiftKeyHeld = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') {
+                shiftKeyHeld = false;
+            }
+        });
+
+        function createBoundingBox() {
+            const boundingBox = document.createElement('div');
+            boundingBox.className = 'bounding-box';
+            container.appendChild(boundingBox);
+            updateBoundingBox();
+        }
+
+        function updateBoundingBox() {
+            const boundingBox = document.querySelector('.bounding-box:last-child');
+            if (boundingBox) {
+                boundingBox.style.display = 'block';
+                boundingBox.style.left = `${Math.min(startX, endX)}px`;
+                boundingBox.style.top = `${Math.min(startY, endY)}px`;
+                boundingBox.style.width = `${Math.abs(endX - startX)}px`;
+                boundingBox.style.height = `${Math.abs(endY - startY)}px`;
+            }
+        }
+
+        function clearBoundingBoxes() {
+            const boundingBoxes = document.querySelectorAll('.bounding-box');
+            boundingBoxes.forEach(box => {
+                box.parentNode.removeChild(box);
+            });
+            boundingBoxCounter = 0;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const sendButton = document.getElementById('sendButton')
+            sendButton.addEventListener('click', onSendButtonClick)
+
+            getImage()
+            getInfo()
+        })
+
+        function onSendButtonClick() {
+            const boundingBoxes = Array.from(document.querySelectorAll('.bounding-box'));
+
+            const dataToSend = boundingBoxes.map((boundingBox) => {
+                const left = parseInt(boundingBox.style.left.replace("px", ""))
+                const top = parseInt(boundingBox.style.top.replace("px", ""))
+                const width = parseInt(boundingBox.style.width.replace("px", ""))
+                const height = parseInt(boundingBox.style.height.replace("px", ""))
+                return [
+                    left,
+                    top,
+                    left + width,
+                    top + height,
+                ]   
+            })
+
+            // Send a POST request to the server
+            fetch(`/resolve-image/${imageData.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(dataToSend),
+                })
+                .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json(); // Assuming server responds with JSON
+                })
+                .then(data => {
+                console.log('Server response:', data);
+                })
+                .catch(error => {
+                console.error('Error sending data to server:', error);
+            });
+        }
+
+        let imageData
+
+        async function getImage() {
+            const imgElement = document.getElementById('image');
+            try {
+                imageData = await ((await fetch('/get-image-data')).json())
+                if (!imageData.id) {
+                    throw new Error('The image was not fetched')
+                }
+                fetch(`/get-image/${imageData.id}`)
+                    .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.blob(); // Get the image data as Blob
+                    })
+                    .then(blob => {
+                    // Create a URL for the blob object representing the image data
+                    const imgUrl = URL.createObjectURL(blob);
+                    imgElement.src = imgUrl; // Set the src attribute of the <img> element
+                    })
+                    .catch(error => {
+                    console.error('Error fetching the image:', error);
+                });
+            } catch (e) {
+                console.error(e)
+            }
+        }
+
+        async function getInfo() {
+            fetch('/info').then(r => r.json()).then((response) => {
+                console.log('response', response)
+                document.getElementById('infoContainer').innerHTML = `There is "${response.message}" pending.`
+            })
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+node_modules
+datasets
+nodejs/server/api/src/data/whells_data.csv
+*.h5
